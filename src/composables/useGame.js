@@ -19,6 +19,45 @@ export function useGame() {
   const HEAT_CONSUMPTION_RATE = 2
   const BLIZZARD_CHANCE = 0.15
 
+  const BUILDINGS = {
+    windWall: {
+      id: 'windWall',
+      name: '防风墙',
+      icon: '🧱',
+      description: '用木材和兽皮搭建的防风墙，能有效减少热量流失。',
+      category: 'warm',
+      cost: { wood: 5, hide: 2 },
+      effect: { heatConsumptionReduction: 0.25 },
+      effectDesc: '夜晚热量消耗 -25%'
+    },
+    storageCellar: {
+      id: 'storageCellar',
+      name: '储物地窖',
+      icon: '🏚️',
+      description: '挖掘的地下储物窖，能更好地保存食物。',
+      category: 'food',
+      cost: { wood: 4, tools: 1 },
+      effect: { dailyFoodBonus: 2 },
+      effectDesc: '每天黎明 +2 食物'
+    },
+    watchtower: {
+      id: 'watchtower',
+      name: '瞭望塔',
+      icon: '🗼',
+      description: '高耸的瞭望塔，可以提前发现暴风雪的征兆。',
+      category: 'event',
+      cost: { wood: 6, hide: 2, tools: 1 },
+      effect: { blizzardChanceReduction: 0.4 },
+      effectDesc: '暴风雪概率 -40%'
+    }
+  }
+
+  const buildings = ref({
+    windWall: 0,
+    storageCellar: 0,
+    watchtower: 0
+  })
+
   let dayNightTimer = null
   let nightConsumptionTimer = null
   let autoSaveTimer = null
@@ -28,6 +67,65 @@ export function useGame() {
   const canMakeFire = computed(() => wood.value >= 3)
   const canHunt = computed(() => tools.value > 0)
   const huntSuccessRate = computed(() => 0.3 + tools.value * 0.15)
+
+  const totalHeatConsumptionReduction = computed(() => {
+    return buildings.value.windWall * BUILDINGS.windWall.effect.heatConsumptionReduction
+  })
+
+  const totalDailyFoodBonus = computed(() => {
+    return buildings.value.storageCellar * BUILDINGS.storageCellar.effect.dailyFoodBonus
+  })
+
+  const totalBlizzardChanceReduction = computed(() => {
+    return Math.min(0.8, buildings.value.watchtower * BUILDINGS.watchtower.effect.blizzardChanceReduction)
+  })
+
+  const effectiveHeatConsumptionRate = computed(() => {
+    return HEAT_CONSUMPTION_RATE * (1 - totalHeatConsumptionReduction.value)
+  })
+
+  const effectiveBlizzardChance = computed(() => {
+    return BLIZZARD_CHANCE * (1 - totalBlizzardChanceReduction.value)
+  })
+
+  function canBuild(buildingId) {
+    const building = BUILDINGS[buildingId]
+    if (!building) return false
+    for (const [resource, amount] of Object.entries(building.cost)) {
+      if ((resources[resource]?.value ?? 0) < amount) {
+        return false
+      }
+    }
+    return true
+  }
+
+  const resources = {
+    wood,
+    food,
+    hide,
+    tools
+  }
+
+  function buildStructure(buildingId) {
+    if (gameOver.value || isNight.value) return
+    const building = BUILDINGS[buildingId]
+    if (!building) return
+
+    for (const [resource, amount] of Object.entries(building.cost)) {
+      if ((resources[resource]?.value ?? 0) < amount) {
+        addLog(`建造失败：${building.name} 材料不足`, 'warning')
+        return
+      }
+    }
+
+    for (const [resource, amount] of Object.entries(building.cost)) {
+      resources[resource].value -= amount
+    }
+
+    buildings.value[buildingId]++
+    addLog(`建造了 ${building.icon} ${building.name}！${building.effectDesc}`, 'success')
+    checkGameOver()
+  }
 
   function addLog(message, type = 'info') {
     const timestamp = new Date().toLocaleTimeString()
@@ -53,7 +151,7 @@ export function useGame() {
     if (gameOver.value) return
     
     const multiplier = isBlizzard.value ? 2 : 1
-    const consumption = HEAT_CONSUMPTION_RATE * multiplier
+    const consumption = effectiveHeatConsumptionRate.value * multiplier
     
     if (heat.value >= consumption) {
       heat.value -= consumption
@@ -75,7 +173,7 @@ export function useGame() {
       consumeHeat()
     }, 1000)
     
-    if (Math.random() < BLIZZARD_CHANCE) {
+    if (Math.random() < effectiveBlizzardChance.value) {
       triggerBlizzard()
     }
   }
@@ -87,6 +185,11 @@ export function useGame() {
     if (nightConsumptionTimer) {
       clearInterval(nightConsumptionTimer)
       nightConsumptionTimer = null
+    }
+    
+    if (totalDailyFoodBonus.value > 0) {
+      food.value += totalDailyFoodBonus.value
+      addLog(`🏚️ 储物地窖产出了 ${totalDailyFoodBonus.value} 份食物！`, 'success')
     }
   }
 
@@ -230,6 +333,7 @@ export function useGame() {
       isDay: isDay.value,
       dayCount: dayCount.value,
       isBlizzard: isBlizzard.value,
+      buildings: { ...buildings.value },
       savedAt: Date.now()
     }
     localStorage.setItem(`snowSurvival_${slot}`, JSON.stringify(gameState))
@@ -254,6 +358,7 @@ export function useGame() {
       isDay.value = gameState.isDay
       dayCount.value = gameState.dayCount
       isBlizzard.value = gameState.isBlizzard
+      buildings.value = gameState.buildings || { windWall: 0, storageCellar: 0, watchtower: 0 }
       gameOver.value = false
       gameOverReason.value = ''
       actionLog.value = []
@@ -310,6 +415,7 @@ export function useGame() {
     gameOver.value = false
     gameOverReason.value = ''
     actionLog.value = []
+    buildings.value = { windWall: 0, storageCellar: 0, watchtower: 0 }
     
     stopTimers()
     startTimers()
@@ -344,6 +450,15 @@ export function useGame() {
     canMakeFire,
     canHunt,
     huntSuccessRate,
+    buildings,
+    BUILDINGS,
+    canBuild,
+    buildStructure,
+    totalHeatConsumptionReduction,
+    totalDailyFoodBonus,
+    totalBlizzardChanceReduction,
+    effectiveHeatConsumptionRate,
+    effectiveBlizzardChance,
     chopWood,
     hunt,
     makeTools,

@@ -39,6 +39,16 @@
             :hide="hide"
             :tools="tools"
           />
+          <CampBuildings 
+            :buildings="buildings"
+            :BUILDINGS="BUILDINGS"
+            :isNight="isNight"
+            :gameOver="gameOver"
+            :wood="wood"
+            :hide="hide"
+            :tools="tools"
+            @build="handleBuild"
+          />
         </div>
 
         <div class="center-panel">
@@ -101,6 +111,7 @@ import Thermometer from './components/Thermometer.vue'
 import DayNightIndicator from './components/DayNightIndicator.vue'
 import ResourcePanel from './components/ResourcePanel.vue'
 import ActionPanel from './components/ActionPanel.vue'
+import CampBuildings from './components/CampBuildings.vue'
 import LogPanel from './components/LogPanel.vue'
 import SaveManager from './components/SaveManager.vue'
 import GameOver from './components/GameOver.vue'
@@ -122,6 +133,9 @@ const {
   isDanger,
   canMakeFire,
   huntSuccessRate,
+  buildings,
+  BUILDINGS,
+  buildStructure,
   chopWood,
   hunt,
   makeTools,
@@ -201,6 +215,28 @@ function handleEat() {
   if (food.value > 0) {
     playEat()
     eatFood()
+  } else {
+    playWarning()
+  }
+}
+
+function handleBuild(buildingId) {
+  const building = BUILDINGS[buildingId]
+  if (!building) return
+  
+  const resourceMap = { wood, food, hide, tools }
+  let canAfford = true
+  for (const [resource, amount] of Object.entries(building.cost)) {
+    if (resourceMap[resource]?.value < amount) {
+      canAfford = false
+      break
+    }
+  }
+  
+  if (canAfford && !isNight.value && !gameOver.value) {
+    playCraft()
+    buildStructure(buildingId)
+    playSuccess()
   } else {
     playWarning()
   }
