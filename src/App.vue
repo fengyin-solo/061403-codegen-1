@@ -53,7 +53,15 @@
 
         <div class="center-panel">
           <div class="campfire-wrapper">
-            <Campfire :heat="heat" :canvasSize="280" />
+            <Campfire 
+              :heat="heat" 
+              :canvasSize="280"
+              :buildings="buildings"
+              :isDay="isDay"
+              :warmReduction="totalHeatConsumptionReduction"
+              :foodBonus="totalDailyFoodBonus"
+              :stormReduction="totalBlizzardChanceReduction"
+            />
           </div>
           <div class="heat-info">
             <div class="heat-label">🔥 热量值</div>
@@ -136,6 +144,9 @@ const {
   buildings,
   BUILDINGS,
   buildStructure,
+  totalHeatConsumptionReduction,
+  totalDailyFoodBonus,
+  totalBlizzardChanceReduction,
   chopWood,
   hunt,
   makeTools,

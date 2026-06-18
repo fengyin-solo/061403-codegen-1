@@ -113,7 +113,7 @@ export function useGame() {
 
     for (const [resource, amount] of Object.entries(building.cost)) {
       if ((resources[resource]?.value ?? 0) < amount) {
-        addLog(`建造失败：${building.name} 材料不足`, 'warning')
+        addLog(`❌ 建造失败：${building.name} 材料不足`, 'warning')
         return
       }
     }
@@ -123,7 +123,22 @@ export function useGame() {
     }
 
     buildings.value[buildingId]++
-    addLog(`建造了 ${building.icon} ${building.name}！${building.effectDesc}`, 'success')
+    const count = buildings.value[buildingId]
+    let extraInfo = ''
+    
+    if (buildingId === 'windWall') {
+      const totalReduction = Math.round(totalHeatConsumptionReduction.value * 100)
+      const newRate = effectiveHeatConsumptionRate.value.toFixed(2)
+      extraInfo = `【总计 ${count} 座 → 热量消耗降低 ${totalReduction}%，夜间消耗 ${newRate}/秒】`
+    } else if (buildingId === 'storageCellar') {
+      extraInfo = `【总计 ${count} 座 → 每天黎明产出 ${totalDailyFoodBonus.value} 食物】`
+    } else if (buildingId === 'watchtower') {
+      const totalReduction = Math.round(totalBlizzardChanceReduction.value * 100)
+      const newChance = Math.round(effectiveBlizzardChance.value * 100)
+      extraInfo = `【总计 ${count} 座 → 暴风雪概率降低 ${totalReduction}%，当前概率 ${newChance}%】`
+    }
+    
+    addLog(`🔨 建造了 ${building.icon} ${building.name}（x${count}）！${building.effectDesc} ${extraInfo}`, 'success')
     checkGameOver()
   }
 
@@ -168,28 +183,61 @@ export function useGame() {
   }
 
   function startNightCycle() {
-    addLog(`夜幕降临，第 ${dayCount.value} 天结束`, 'info')
+    addLog(`🌙 夜幕降临，第 ${dayCount.value} 天结束`, 'info')
+    
+    const activeBuildings = []
+    if (buildings.value.windWall > 0) {
+      activeBuildings.push(`🧱 防风墙 x${buildings.value.windWall}（热量消耗 -${Math.round(totalHeatConsumptionReduction.value * 100)}%`)
+    }
+    if (buildings.value.watchtower > 0) {
+      activeBuildings.push(`🗼 瞭望塔 x${buildings.value.watchtower}（暴风雪概率 -${Math.round(totalBlizzardChanceReduction.value * 100)}%`)
+    }
+    if (activeBuildings.length > 0) {
+      addLog(`🏕️ 营地设施夜间生效中：${activeBuildings.join('、')}`, 'info')
+    }
+    
     nightConsumptionTimer = setInterval(() => {
       consumeHeat()
     }, 1000)
     
-    if (Math.random() < effectiveBlizzardChance.value) {
+    const blizzardRoll = Math.random()
+    const actualChance = effectiveBlizzardChance.value
+    if (buildings.value.watchtower > 0) {
+      addLog(`🗼 瞭望塔监测天气：暴风雪概率 ${Math.round(BLIZZARD_CHANCE * 100)}% → ${Math.round(actualChance * 100)}%`, 'info')
+    }
+    if (blizzardRoll < actualChance) {
       triggerBlizzard()
+    } else if (buildings.value.watchtower > 0 && blizzardRoll < BLIZZARD_CHANCE) {
+      addLog(`🗼 瞭望塔预警成功：暴风雪被提前规避！`, 'success')
     }
   }
 
   function startDayCycle() {
     dayCount.value++
-    addLog(`天亮了，第 ${dayCount.value} 天开始`, 'success')
+    addLog(`☀️ 天亮了，第 ${dayCount.value} 天开始`, 'success')
     isBlizzard.value = false
     if (nightConsumptionTimer) {
       clearInterval(nightConsumptionTimer)
       nightConsumptionTimer = null
     }
     
+    const morningBenefits = []
     if (totalDailyFoodBonus.value > 0) {
       food.value += totalDailyFoodBonus.value
-      addLog(`🏚️ 储物地窖产出了 ${totalDailyFoodBonus.value} 份食物！`, 'success')
+      morningBenefits.push(`🏚️ 储物地窖 +${totalDailyFoodBonus.value} 食物`)
+    }
+    
+    if (buildings.value.windWall > 0) {
+      const savedHeat = Math.round(HEAT_CONSUMPTION_RATE * totalHeatConsumptionReduction.value * 20)
+      morningBenefits.push(`🧱 防风墙昨夜节省约 ${savedHeat} 热量`)
+    }
+    
+    if (morningBenefits.length > 0) {
+      addLog(`📦 营地设施收益：${morningBenefits.join('，')}`, 'success')
+    }
+    
+    if (buildings.value.watchtower > 0 && !isBlizzard.value) {
+      addLog(`🗼 瞭望塔播报：今日天气晴朗，适宜外出活动！`, 'info')
     }
   }
 

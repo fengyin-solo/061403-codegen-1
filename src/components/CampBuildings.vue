@@ -4,18 +4,32 @@
     <div v-if="isNight" class="night-warning">
       <span>🌙 夜晚无法建造设施</span>
     </div>
+    <div v-else class="day-hint">
+      <span>☀️ 白天可围绕火堆规划设施布局</span>
+    </div>
     <div class="buildings-list">
       <div 
         v-for="building in buildingList" 
         :key="building.id"
         class="building-card"
-        :class="{ disabled: isNight || gameOver || !canBuild(building.id) }"
+        :class="[
+          { disabled: isNight || gameOver || !canBuild(building.id) },
+          `building-${building.category}`
+        ]"
       >
         <div class="building-header">
-          <span class="building-icon">{{ building.icon }}</span>
+          <div class="icon-wrapper">
+            <span class="building-icon">{{ building.icon }}</span>
+            <span class="position-badge">{{ getPositionText(building.id) }}</span>
+          </div>
           <div class="building-info">
             <span class="building-name">{{ building.name }}</span>
-            <span class="building-count">已建造: {{ buildings[building.id] }}</span>
+            <span class="building-count">
+              已建造: <strong>{{ buildings[building.id] }}</strong>
+              <span v-if="buildings[building.id] > 0" class="current-effect">
+                {{ getCurrentEffectText(building) }}
+              </span>
+            </span>
           </div>
         </div>
         <p class="building-desc">{{ building.description }}</p>
@@ -37,7 +51,7 @@
           :disabled="isNight || gameOver || !canBuild(building.id)"
           @click="$emit('build', building.id)"
         >
-          建造
+          {{ buildings[building.id] > 0 ? '升级建造' : '建造' }}
         </button>
       </div>
     </div>
@@ -60,6 +74,31 @@ const props = defineProps({
 defineEmits(['build'])
 
 const buildingList = computed(() => Object.values(props.BUILDINGS))
+
+const positionMap = {
+  windWall: { text: '左侧', icon: '⬅️' },
+  storageCellar: { text: '右侧', icon: '➡️' },
+  watchtower: { text: '上方', icon: '⬆️' }
+}
+
+function getPositionText(buildingId) {
+  return positionMap[buildingId]?.icon || '📍'
+}
+
+function getCurrentEffectText(building) {
+  const count = props.buildings[building.id] || 0
+  if (count === 0) return ''
+  switch (building.id) {
+    case 'windWall':
+      return `（节省${Math.round(building.effect.heatConsumptionReduction * 100 * count)}%热量）`
+    case 'storageCellar':
+      return `（+${building.effect.dailyFoodBonus * count}食物/天）`
+    case 'watchtower':
+      return `（降低${Math.min(80, building.effect.blizzardChanceReduction * 100 * count)}%暴雪）`
+    default:
+      return ''
+  }
+}
 
 function canBuild(buildingId) {
   const building = props.BUILDINGS[buildingId]
@@ -99,6 +138,23 @@ function canBuild(buildingId) {
   font-size: 14px;
 }
 
+.day-hint {
+  background: rgba(255, 200, 100, 0.2);
+  border: 1px solid rgba(255, 200, 100, 0.5);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 15px;
+  text-align: center;
+  color: #ffe4b5;
+  font-size: 13px;
+  animation: hintPulse 2s ease-in-out infinite;
+}
+
+@keyframes hintPulse {
+  0%, 100% { background: rgba(255, 200, 100, 0.15); }
+  50% { background: rgba(255, 200, 100, 0.3); }
+}
+
 .buildings-list {
   display: flex;
   flex-direction: column;
@@ -125,18 +181,34 @@ function canBuild(buildingId) {
 
 .building-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 8px;
+}
+
+.icon-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
 .building-icon {
   font-size: 32px;
 }
 
+.position-badge {
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 1px 4px;
+  border-radius: 6px;
+}
+
 .building-info {
   display: flex;
   flex-direction: column;
+  flex: 1;
 }
 
 .building-name {
@@ -148,6 +220,44 @@ function canBuild(buildingId) {
 .building-count {
   color: rgba(255, 255, 255, 0.7);
   font-size: 12px;
+  line-height: 1.5;
+}
+
+.building-count strong {
+  color: #ffd700;
+  font-weight: bold;
+}
+
+.current-effect {
+  color: #7fff7f;
+  font-weight: 500;
+}
+
+.building-warm {
+  border-color: rgba(255, 150, 100, 0.3);
+}
+
+.building-warm:hover:not(.disabled) {
+  border-color: rgba(255, 150, 100, 0.6);
+  box-shadow: 0 4px 15px rgba(255, 150, 100, 0.2);
+}
+
+.building-food {
+  border-color: rgba(100, 200, 100, 0.3);
+}
+
+.building-food:hover:not(.disabled) {
+  border-color: rgba(100, 200, 100, 0.6);
+  box-shadow: 0 4px 15px rgba(100, 200, 100, 0.2);
+}
+
+.building-event {
+  border-color: rgba(100, 150, 255, 0.3);
+}
+
+.building-event:hover:not(.disabled) {
+  border-color: rgba(100, 150, 255, 0.6);
+  box-shadow: 0 4px 15px rgba(100, 150, 255, 0.2);
 }
 
 .building-desc {

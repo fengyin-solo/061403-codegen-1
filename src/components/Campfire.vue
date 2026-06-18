@@ -1,11 +1,54 @@
 <template>
   <div class="campfire-container">
-    <canvas ref="canvasRef" :width="canvasSize" :height="canvasSize"></canvas>
+    <div class="campfire-scene">
+      <canvas ref="canvasRef" :width="canvasSize" :height="canvasSize"></canvas>
+      <div class="buildings-overlay">
+        <div 
+          v-for="slot in buildingSlots" 
+          :key="slot.id"
+          class="building-slot"
+          :class="[
+            slot.position,
+            { occupied: buildings[slot.buildingId] > 0 },
+            { 'slot-warm': slot.buildingId === 'windWall' },
+            { 'slot-food': slot.buildingId === 'storageCellar' },
+            { 'slot-event': slot.buildingId === 'watchtower' },
+            { 'pulse-warm': slot.buildingId === 'windWall' && !isDay && buildings[slot.buildingId] > 0 },
+            { 'pulse-food': slot.buildingId === 'storageCellar' && isDay && buildings[slot.buildingId] > 0 },
+            { 'pulse-event': slot.buildingId === 'watchtower' && buildings[slot.buildingId] > 0 }
+          ]"
+          :style="slot.style"
+        >
+          <div v-if="buildings[slot.buildingId] > 0" class="building-display">
+            <span class="building-icon-lg">{{ slot.icon }}</span>
+            <span class="building-badge">x{{ buildings[slot.buildingId] }}</span>
+          </div>
+          <div v-else class="slot-empty">
+            <span class="slot-placeholder">+</span>
+          </div>
+          <div class="slot-label">{{ slot.name }}</div>
+        </div>
+      </div>
+      <div class="effect-indicators" v-if="hasAnyBuilding">
+        <div v-if="warmReduction > 0" class="effect-badge warm-effect" :title="`热量消耗减少 ${Math.round(warmReduction * 100)}%`">
+          <span class="effect-icon">🛡️</span>
+          <span class="effect-text">-{{ Math.round(warmReduction * 100) }}%</span>
+        </div>
+        <div v-if="foodBonus > 0" class="effect-badge food-effect" :title="`每日产出 ${foodBonus} 食物`">
+          <span class="effect-icon">🍖</span>
+          <span class="effect-text">+{{ foodBonus }}/天</span>
+        </div>
+        <div v-if="stormReduction > 0" class="effect-badge event-effect" :title="`暴风雪概率降低 ${Math.round(stormReduction * 100)}%`">
+          <span class="effect-icon">🌤️</span>
+          <span class="effect-text">-{{ Math.round(stormReduction * 100) }}%</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 
 const props = defineProps({
   heat: {
@@ -15,7 +58,58 @@ const props = defineProps({
   canvasSize: {
     type: Number,
     default: 200
+  },
+  buildings: {
+    type: Object,
+    default: () => ({ windWall: 0, storageCellar: 0, watchtower: 0 })
+  },
+  isDay: {
+    type: Boolean,
+    default: true
+  },
+  warmReduction: {
+    type: Number,
+    default: 0
+  },
+  foodBonus: {
+    type: Number,
+    default: 0
+  },
+  stormReduction: {
+    type: Number,
+    default: 0
   }
+})
+
+const buildingSlots = computed(() => [
+  {
+    id: 'windWall',
+    buildingId: 'windWall',
+    name: '防风墙',
+    icon: '🧱',
+    position: 'left',
+    style: { top: '38%', left: '-15px' }
+  },
+  {
+    id: 'storageCellar',
+    buildingId: 'storageCellar',
+    name: '储物地窖',
+    icon: '🏚️',
+    position: 'right',
+    style: { top: '38%', right: '-15px' }
+  },
+  {
+    id: 'watchtower',
+    buildingId: 'watchtower',
+    name: '瞭望塔',
+    icon: '🗼',
+    position: 'top',
+    style: { top: '-8px', left: '50%', transform: 'translateX(-50%)' }
+  }
+])
+
+const hasAnyBuilding = computed(() => {
+  return props.buildings.windWall > 0 || props.buildings.storageCellar > 0 || props.buildings.watchtower > 0
 })
 
 const canvasRef = ref(null)
@@ -204,9 +298,190 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.campfire-scene {
+  position: relative;
+}
+
 canvas {
   border-radius: 50%;
   background: radial-gradient(circle, #1a1a2e 0%, #0f0f1a 100%);
   box-shadow: 0 0 30px rgba(255, 100, 50, 0.3);
+}
+
+.buildings-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.building-slot {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: all 0.3s ease;
+}
+
+.building-slot.occupied {
+  z-index: 5;
+}
+
+.building-display {
+  position: relative;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 12px;
+  padding: 6px 8px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: buildingAppear 0.5s ease;
+}
+
+@keyframes buildingAppear {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.building-icon-lg {
+  font-size: 28px;
+}
+
+.building-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 22px;
+  text-align: center;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.slot-empty {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 6px 12px;
+  opacity: 0.6;
+}
+
+.slot-placeholder {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: bold;
+}
+
+.slot-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.5);
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.slot-warm.occupied .building-display {
+  border-color: rgba(255, 150, 100, 0.6);
+  box-shadow: 0 0 12px rgba(255, 150, 100, 0.4);
+}
+
+.slot-food.occupied .building-display {
+  border-color: rgba(100, 200, 100, 0.6);
+  box-shadow: 0 0 12px rgba(100, 200, 100, 0.4);
+}
+
+.slot-event.occupied .building-display {
+  border-color: rgba(100, 150, 255, 0.6);
+  box-shadow: 0 0 12px rgba(100, 150, 255, 0.4);
+}
+
+.pulse-warm .building-display {
+  animation: pulseWarm 2s ease-in-out infinite;
+}
+
+@keyframes pulseWarm {
+  0%, 100% { box-shadow: 0 0 12px rgba(255, 150, 100, 0.4); }
+  50% { box-shadow: 0 0 24px rgba(255, 150, 100, 0.8); }
+}
+
+.pulse-food .building-display {
+  animation: pulseFood 3s ease-in-out infinite;
+}
+
+@keyframes pulseFood {
+  0%, 100% { box-shadow: 0 0 12px rgba(100, 200, 100, 0.4); }
+  50% { box-shadow: 0 0 24px rgba(100, 200, 100, 0.8); }
+}
+
+.pulse-event .building-display {
+  animation: pulseEvent 4s ease-in-out infinite;
+}
+
+@keyframes pulseEvent {
+  0%, 100% { box-shadow: 0 0 12px rgba(100, 150, 255, 0.4); }
+  50% { box-shadow: 0 0 24px rgba(100, 150, 255, 0.8); }
+}
+
+.effect-indicators {
+  position: absolute;
+  bottom: -32px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 140%;
+}
+
+.effect-badge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: bold;
+  backdrop-filter: blur(6px);
+  animation: badgePop 0.5s ease;
+}
+
+@keyframes badgePop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.effect-icon {
+  font-size: 14px;
+}
+
+.warm-effect {
+  background: rgba(255, 150, 100, 0.85);
+  color: white;
+  border: 1px solid rgba(255, 200, 150, 0.6);
+}
+
+.food-effect {
+  background: rgba(100, 200, 100, 0.85);
+  color: white;
+  border: 1px solid rgba(150, 230, 150, 0.6);
+}
+
+.event-effect {
+  background: rgba(100, 150, 255, 0.85);
+  color: white;
+  border: 1px solid rgba(150, 180, 255, 0.6);
 }
 </style>
